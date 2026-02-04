@@ -1,0 +1,711 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <title>Will you be my Valentine?</title>
+
+  <!-- Confetti library -->
+  <script src="https://cdn.jsdelivr.net/npm/canvas-confetti@1.9.3/dist/confetti.browser.min.js"></script>
+
+  <style>
+    :root {
+      --bg1: #ffd6e7;
+      --bg2: #ffeef6;
+      --card: #ffffffcc;
+      --yes: #ff3b7a;
+      --yesHover: #ff1f68;
+    }
+
+    * { box-sizing: border-box; }
+
+    html, body {
+      margin: 0;
+      overflow-x: hidden;
+    }
+
+    body {
+      min-height: 100svh;
+      display: grid;
+      place-items: center;
+      background: radial-gradient(circle at top, var(--bg2), var(--bg1));
+      font-family: system-ui, sans-serif;
+      overflow: hidden;
+      padding: 16px;
+    }
+
+    /* FULL-SCREEN CONFETTI CANVAS */
+    #confettiCanvas {
+      position: fixed;
+      inset: 0;
+      width: 100vw;
+      height: 100vh;
+      pointer-events: none;
+      z-index: 9999;
+    }
+
+    .card {
+      width: min(720px, 92vw);
+      padding: 26px 22px;
+      background: var(--card);
+      backdrop-filter: blur(10px);
+      border-radius: 22px;
+      text-align: center;
+      box-shadow: 0 18px 60px rgba(0,0,0,.15);
+      position: relative;
+      z-index: 10;
+    }
+
+    .art {
+      width: min(260px, 80vw);
+      margin: 0 auto 10px;
+      display: block;
+      filter: drop-shadow(0 10px 14px rgba(0,0,0,.12));
+    }
+
+    h1 {
+      font-size: clamp(26px, 4vw, 44px);
+      margin: 12px 0 18px;
+    }
+
+    .button-zone {
+      position: relative;
+      width: min(520px, 92%);
+      height: 150px;
+      margin: 0 auto;
+      touch-action: none;
+    }
+
+    button {
+      position: absolute;
+      top: 50%;
+      transform: translateY(-50%);
+      padding: 16px 24px;
+      font-size: clamp(14px, 3vw, 18px);
+      font-weight: 800;
+      border-radius: 999px;
+      border: none;
+      cursor: pointer;
+      box-shadow: 0 10px 24px rgba(0,0,0,.14);
+      user-select: none;
+      -webkit-tap-highlight-color: transparent;
+      transition: transform .12s ease, background .12s ease;
+      z-index: 20;
+    }
+
+    #yesBtn {
+      left: 18%;
+      background: var(--yes);
+      color: #fff;
+    }
+    #yesBtn:hover { background: var(--yesHover); }
+    #yesBtn:active { transform: translateY(-50%) scale(0.95); }
+
+    #noBtn {
+      left: 62%;
+      background: #e5e7eb;
+      color: #111827;
+      cursor: pointer;
+    }
+    #noBtn:hover { background: #d1d5db; }
+
+    .hint {
+      margin-top: 10px;
+      font-size: 13px;
+      opacity: .7;
+    }
+
+    .result {
+      display: none;
+      margin-top: 18px;
+      animation: pop .35s ease;
+    }
+
+    .result h2 {
+      font-size: clamp(30px, 4.5vw, 46px);
+      margin: 10px 0;
+    }
+
+    .fireworks {
+      width: min(380px, 90vw);
+      margin: 0 auto;
+      display: block;
+    }
+
+    /* CATS ANIMATION CONTAINER */
+    .cats-container {
+      /* Hidden by default, shown only when Yes is clicked */
+      display: none;
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      z-index: 11;
+      background: rgba(255, 255, 255, 0.1);
+      backdrop-filter: blur(5px);
+      pointer-events: none; /* Lets you click through empty spaces */
+    }
+
+    .cats-container.show {
+      display: block;
+    }
+
+    .cats-scene {
+      position: absolute;
+      bottom: 0;
+      left: 0;
+      width: 100%;
+      height: 280px; /* Adjust based on floor level */
+      display: flex;
+      align-items: flex-end;
+      justify-content: center;
+      /* Gap is 0 so they can touch heads */
+      gap: 0px; 
+      overflow: hidden; /* Hides cats when off-screen */
+    }
+
+    /* WRAPPERS: Handle the Horizontal Movement (The Walk) */
+    .cat-wrapper {
+      position: relative;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      width: 180px;
+      /* Ensure they appear above one another correctly */
+      z-index: 10;
+    }
+
+    /* NAME TAGS */
+    .cat-name {
+      font-size: clamp(16px, 3vw, 24px);
+      font-weight: 700;
+      color: #ff3b7a;
+      margin-bottom: 8px;
+      text-shadow: 0 2px 4px rgba(0,0,0,0.1);
+      opacity: 0; /* Fade in with the cat */
+      animation: fadeIn 0.5s ease-in forwards;
+    }
+
+    /* SVGS: Handle the Vertical Movement (The Bounce) and Rotation (The Rub) */
+    .cat-svg {
+      width: 160px;
+      height: 160px;
+      filter: drop-shadow(0 8px 16px rgba(0,0,0,.2));
+      /* Set pivot point for the head rub */
+      transform-origin: bottom center;
+    }
+
+    /* --- LEFT CAT ANIMATIONS --- */
+    .cat-wrapper.left {
+      /* 1. Walk in from left (-50vw) to center (0) over 2.5s */
+      animation: walkInLeft 2.5s linear forwards; 
+    }
+
+    .cat-wrapper.left .cat-svg {
+      /* 1. Bounce while walking (runs 5 times for 0.5s each = 2.5s) 
+         2. Wait 2.5s, then start Head Rubbing indefinitely */
+      animation: 
+        walkBounce 0.5s ease-in-out 5,
+        headRubLeft 2s ease-in-out 2.5s infinite;
+    }
+
+    /* --- RIGHT CAT ANIMATIONS --- */
+    .cat-wrapper.right {
+      /* 1. Walk in from right (50vw) to center (0) over 2.5s */
+      animation: walkInRight 2.5s linear forwards;
+    }
+
+    .cat-wrapper.right .cat-svg {
+      /* Flip the cat to face left */
+      transform: scaleX(-1);
+      /* Transform-origin needs to be adjusted because of the flip */
+      transform-origin: bottom center;
+      
+      /* 1. Bounce while walking 
+         2. Wait 2.5s, then start Head Rubbing */
+      animation: 
+        walkBounce 0.5s ease-in-out 5,
+        headRubRight 2s ease-in-out 2.5s infinite;
+    }
+
+
+    /* --- KEYFRAMES --- */
+
+    @keyframes fadeIn {
+      to { opacity: 1; }
+    }
+
+    /* Horizontal Walk (Wrapper) */
+    @keyframes walkInLeft {
+      0% { transform: translateX(-50vw) translateX(-100%); }
+      100% { transform: translateX(-15px); } /* Stop slightly left of center */
+    }
+
+    @keyframes walkInRight {
+      0% { transform: translateX(50vw) translateX(100%); }
+      100% { transform: translateX(15px); } /* Stop slightly right of center */
+    }
+
+    /* Vertical Bounce (The "Not Floating" fix) */
+    @keyframes walkBounce {
+      0%, 100% { transform: translateY(0) scaleX(1); }
+      50% { transform: translateY(-15px) scaleX(1); } /* Higher step for walking look */
+    }
+    
+    /* Because Right cat is flipped via CSS property, we just animate Y here, 
+       but we must maintain scaleX(-1) in the next animation */
+
+    /* Head Rub / Nuzzle Interaction */
+    @keyframes headRubLeft {
+      0%, 100% { 
+        transform: scaleX(-1) rotate(0deg) translateY(0); 
+      }
+      50% { 
+        /* Lean to the right (towards other cat) */
+        transform: scaleX(-1) rotate(-10deg) translateY(2px); 
+      }
+    }
+
+    @keyframes headRubRight {
+      0%, 100% { 
+        /* Maintain the flip */
+        transform: scaleX(-1) rotate(0deg) translateY(0); 
+      }
+      50% { 
+        /* Lean to the "left" (which is visually center because of flip) */
+        transform: scaleX(-1) rotate(10deg) translateY(2px); 
+      }
+    }
+
+    @keyframes pop {
+      from { transform: scale(.96); opacity: 0; }
+      to { transform: scale(1); opacity: 1; }
+    }
+
+    /* IMAGE CAROUSEL */
+    .image-carousel {
+      display: none;
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      z-index: 12;
+      pointer-events: none;
+      align-items: center;
+      justify-content: center;
+    }
+
+    .image-carousel.show {
+      display: flex;
+    }
+
+    .carousel-center {
+      position: relative;
+      width: 400px;
+      height: 400px;
+    }
+
+    .carousel-image {
+      position: absolute;
+      width: 100px;
+      height: 100px;
+      object-fit: cover;
+      border-radius: 12px;
+      box-shadow: 0 8px 16px rgba(0, 0, 0, 0.2);
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%);
+      animation: rotateAround 8s linear infinite;
+    }
+
+    .carousel-image:nth-child(1) { animation-delay: 0s; }
+    .carousel-image:nth-child(2) { animation-delay: -1.33s; }
+    .carousel-image:nth-child(3) { animation-delay: -2.67s; }
+    .carousel-image:nth-child(4) { animation-delay: -4s; }
+    .carousel-image:nth-child(5) { animation-delay: -5.33s; }
+    .carousel-image:nth-child(6) { animation-delay: -6.67s; }
+
+    @keyframes rotateAround {
+      0% {
+        transform: translate(calc(-50% + 150px), -50%);
+      }
+      16.67% {
+        transform: translate(calc(-50% + 75px), calc(-50% + 130px));
+      }
+      33.33% {
+        transform: translate(calc(-50% - 75px), calc(-50% + 130px));
+      }
+      50% {
+        transform: translate(calc(-50% - 150px), -50%);
+      }
+      66.67% {
+        transform: translate(calc(-50% - 75px), calc(-50% - 130px));
+      }
+      83.33% {
+        transform: translate(calc(-50% + 75px), calc(-50% - 130px));
+      }
+      100% {
+        transform: translate(calc(-50% + 150px), -50%);
+      }
+    }
+
+    /* HEARTS ANIMATION */
+    .hearts-container {
+      display: none;
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      z-index: 13;
+      pointer-events: none;
+    }
+
+    .hearts-container.show {
+      display: block;
+    }
+
+    .heart {
+      position: absolute;
+      bottom: 20%;
+      left: 50%;
+      transform: translate(-50%, 0);
+      animation: floatUp 2s ease-out forwards;
+    }
+
+    .heart svg {
+      width: 40px;
+      height: 40px;
+      filter: drop-shadow(0 4px 8px rgba(0, 0, 0, 0.2));
+    }
+
+    @keyframes floatUp {
+      0% {
+        opacity: 1;
+        transform: translate(-50%, 0) scale(0.3);
+      }
+      100% {
+        opacity: 0;
+        transform: translate(-50%, -300px) scale(1.5);
+      }
+    }
+
+    @media (max-width: 600px) {
+      .button-zone {
+        height: 120px;
+      }
+
+      button {
+        padding: 12px 18px;
+      }
+
+      #yesBtn {
+        left: 10%;
+      }
+
+      #noBtn {
+        left: 55%;
+      }
+    }
+  </style>
+</head>
+
+<body>
+  <canvas id="confettiCanvas"></canvas>
+
+  <div class="image-carousel" id="imageCarousel">
+    <div class="carousel-center">
+      <img src="20260111_200413.jpg" alt="memory" class="carousel-image" />
+      <img src="20260201_155648.jpg" alt="memory" class="carousel-image" />
+      <img src="20260201_155629.jpg" alt="memory" class="carousel-image" />
+      <img src="IMG-20260201-WA0036.jpg" alt="memory" class="carousel-image" />
+      <img src="20260201_155654.jpg" alt="memory" class="carousel-image" />
+      <img src="20260201_155656.jpg" alt="memory" class="carousel-image" />
+    </div>
+  </div>
+  <div class="hearts-container" id="heartsContainer"></div>
+  <div class="cats-container" id="catsContainer">
+    <div class="cats-scene">
+      
+      <div class="cat-wrapper left">
+        <div class="cat-name">Tasneem</div>
+        <svg class="cat-svg" viewBox="0 0 120 120" xmlns="http://www.w3.org/2000/svg">
+          <ellipse cx="60" cy="75" rx="35" ry="28" fill="#f7c7a1"/>
+          <circle cx="60" cy="40" r="25" fill="#f7c7a1"/>
+          <path d="M 40 20 L 35 0 L 45 15 Z" fill="#f7c7a1"/>
+          <path d="M 80 20 L 85 0 L 75 15 Z" fill="#f7c7a1"/>
+          <path d="M 40 20 L 38 8 L 42 16 Z" fill="#ff8fab"/>
+          <path d="M 80 20 L 82 8 L 78 16 Z" fill="#ff8fab"/>
+          <circle cx="50" cy="35" r="3" fill="#000"/>
+          <circle cx="70" cy="35" r="3" fill="#000"/>
+          <circle cx="60" cy="45" r="2" fill="#ff8fab"/>
+          <path d="M 60 45 Q 55 50 50 48" stroke="#000" stroke-width="1" fill="none"/>
+          <path d="M 60 45 Q 65 50 70 48" stroke="#000" stroke-width="1" fill="none"/>
+          <path d="M 85 80 Q 110 70 105 50" stroke="#f7c7a1" stroke-width="12" fill="none" stroke-linecap="round"/>
+          <ellipse cx="50" cy="100" rx="8" ry="12" fill="#f7c7a1"/>
+          <ellipse cx="70" cy="100" rx="8" ry="12" fill="#f7c7a1"/>
+        </svg>
+      </div>
+
+      <div class="cat-wrapper right">
+        <div class="cat-name">Husain</div>
+        <svg class="cat-svg" viewBox="0 0 120 120" xmlns="http://www.w3.org/2000/svg">
+          <ellipse cx="60" cy="75" rx="35" ry="28" fill="#ffb3d9"/>
+          <circle cx="60" cy="40" r="25" fill="#ffb3d9"/>
+          <path d="M 40 20 L 35 0 L 45 15 Z" fill="#ffb3d9"/>
+          <path d="M 80 20 L 85 0 L 75 15 Z" fill="#ffb3d9"/>
+          <path d="M 40 20 L 38 8 L 42 16 Z" fill="#ff69b4"/>
+          <path d="M 80 20 L 82 8 L 78 16 Z" fill="#ff69b4"/>
+          <circle cx="50" cy="35" r="3" fill="#000"/>
+          <circle cx="70" cy="35" r="3" fill="#000"/>
+          <circle cx="60" cy="45" r="2" fill="#ff69b4"/>
+          <path d="M 60 45 Q 55 50 50 48" stroke="#000" stroke-width="1" fill="none"/>
+          <path d="M 60 45 Q 65 50 70 48" stroke="#000" stroke-width="1" fill="none"/>
+          <path d="M 35 80 Q 10 70 15 50" stroke="#ffb3d9" stroke-width="12" fill="none" stroke-linecap="round"/>
+          <ellipse cx="50" cy="100" rx="8" ry="12" fill="#ffb3d9"/>
+          <ellipse cx="70" cy="100" rx="8" ry="12" fill="#ffb3d9"/>
+        </svg>
+      </div>
+
+    </div>
+  </div>
+
+  <main class="card">
+    <!-- ANIMAL WITH HEART -->
+    <svg class="art" viewBox="0 0 320 240" xmlns="http://www.w3.org/2000/svg">
+      <defs>
+        <linearGradient id="fur" x1="0" x2="1">
+          <stop offset="0" stop-color="#f7c7a1"/>
+          <stop offset="1" stop-color="#f2a97b"/>
+        </linearGradient>
+        <linearGradient id="heart" x1="0" x2="1">
+          <stop offset="0" stop-color="#ff4d7d"/>
+          <stop offset="1" stop-color="#ff1f68"/>
+        </linearGradient>
+      </defs>
+
+      <path d="M250 50 C250 33 270 25 282 38
+               C294 25 314 33 314 50
+               C314 78 282 92 282 106
+               C282 92 250 78 250 50Z"
+            fill="url(#heart)"/>
+
+      <path d="M90 120 C90 70 140 40 190 60
+               C240 40 290 70 290 120
+               C290 180 240 210 190 210
+               C140 210 90 180 90 120Z"
+            fill="url(#fur)"/>
+
+      <path d="M110 92 L95 55 L140 78 Z" fill="#f2a97b"/>
+      <path d="M270 92 L285 55 L240 78 Z" fill="#f2a97b"/>
+
+      <circle cx="160" cy="130" r="8"/>
+      <circle cx="220" cy="130" r="8"/>
+
+      <path d="M190 144 C186 144 182 148 182 152
+               C182 160 190 164 190 170
+               C190 164 198 160 198 152
+               C198 148 194 144 190 144Z"
+            fill="#ff7aa2"/>
+    </svg>
+
+    <h1>Tasneem will you be my valentine?</h1>
+
+    <section class="button-zone" id="zone">
+      <button id="yesBtn">Yes</button>
+      <button id="noBtn">No</button>
+    </section>
+
+    <!-- HINT -->
+    <div class="hint" id="hint">“No” seems a bit shy 😈</div>
+
+    <section class="result" id="result">
+      <h2>YAY! 🎉</h2>
+      <img
+        class="fireworks"
+        src="https://media.giphy.com/media/26ufdipQqU2lhNA4g/giphy.gif"
+        alt="Fireworks"
+      />
+    </section>
+  </main>
+
+  <script>
+    const zone = document.getElementById("zone");
+    const yesBtn = document.getElementById("yesBtn");
+    const noBtn = document.getElementById("noBtn");
+    const result = document.getElementById("result");
+    const hint = document.getElementById("hint");
+    const catsContainer = document.getElementById("catsContainer");
+    const catsScene = document.getElementById("catsScene");
+    const imageCarousel = document.getElementById("imageCarousel");
+    const heartsContainer = document.getElementById("heartsContainer");
+    let hasClicked = false;
+    let noClickCount = 0;
+
+    /* ---------- CONFETTI ---------- */
+    const confettiCanvas = document.getElementById("confettiCanvas");
+
+    function resizeConfettiCanvas() {
+      const dpr = Math.max(1, window.devicePixelRatio || 1);
+      confettiCanvas.width = Math.floor(window.innerWidth * dpr);
+      confettiCanvas.height = Math.floor(window.innerHeight * dpr);
+      confettiCanvas.style.width = "100vw";
+      confettiCanvas.style.height = "100vh";
+    }
+
+    resizeConfettiCanvas();
+    window.addEventListener("resize", resizeConfettiCanvas);
+    window.addEventListener("orientationchange", () => setTimeout(resizeConfettiCanvas, 150));
+
+    const confettiInstance = confetti.create(confettiCanvas, {
+      resize: false,
+      useWorker: true
+    });
+
+    function fullScreenConfetti() {
+      const end = Date.now() + 1600;
+
+      (function frame() {
+        confettiInstance({
+          particleCount: 12,
+          spread: 90,
+          startVelocity: 45,
+          ticks: 180,
+          origin: { x: Math.random(), y: Math.random() * 0.3 }
+        });
+        if (Date.now() < end) requestAnimationFrame(frame);
+      })();
+
+      setTimeout(() => {
+        confettiInstance({
+          particleCount: 300,
+          spread: 140,
+          startVelocity: 60,
+          ticks: 220,
+          origin: { x: 0.5, y: 0.55 }
+        });
+      }, 300);
+    }
+
+    /* ---------- CAT ANIMATION ---------- */
+    function showCatsAnimation() {
+      catsContainer.classList.add("show");
+      imageCarousel.classList.add("show");
+      
+      // After cats walk in (2.5s), start rubbing animation
+      setTimeout(() => {
+        catsScene.classList.add("rubbing");
+      }, 2500);
+
+      // Create hearts animation after head rubbing has been going for a bit
+      setTimeout(() => {
+        createHearts();
+      }, 3500);
+
+      // Show final result after animation completes
+      setTimeout(() => {
+        catsContainer.style.display = "none";
+        imageCarousel.style.display = "none";
+        heartsContainer.style.display = "none";
+        zone.style.display = "none";
+        hint.style.display = "none";
+        result.style.display = "block";
+        fullScreenConfetti();
+      }, 5500);
+    }
+
+    /* ---------- CREATE HEARTS ANIMATION ---------- */
+    function createHearts() {
+      heartsContainer.classList.add("show");
+      
+      // Array of different red shades
+      const redShades = [
+        "#ff0000", "#ff1a1a", "#ff3333", "#ff4d4d", "#ff6666",
+        "#ff7f7f", "#ff9999", "#ffb3b3", "#cc0000", "#dd0000",
+        "#ee0000", "#ff0a0a", "#ff1515", "#ff2a2a", "#ff3f3f",
+        "#ff5454", "#ff6969", "#ff7e7e", "#ff9393", "#ffa8a8"
+      ];
+
+      // Create 20+ hearts with SVG
+      for (let i = 0; i < 25; i++) {
+        const heart = document.createElement("div");
+        heart.classList.add("heart");
+        
+        // Create SVG heart
+        const svg = document.createElementNS("http://www.w3.org/2000/svg", "svg");
+        svg.setAttribute("viewBox", "0 0 100 100");
+        svg.setAttribute("xmlns", "http://www.w3.org/2000/svg");
+        
+        const path = document.createElementNS("http://www.w3.org/2000/svg", "path");
+        path.setAttribute("d", "M50,85 C20,70 5,60 5,45 C5,30 15,20 27,20 C35,20 42,25 50,32 C58,25 65,20 73,20 C85,20 95,30 95,45 C95,60 80,70 50,85 Z");
+        path.setAttribute("fill", redShades[i % redShades.length]);
+        
+        svg.appendChild(path);
+        heart.appendChild(svg);
+        
+        // Random delay for staggered effect
+        const delay = Math.random() * 0.5;
+        heart.style.animationDelay = delay + "s";
+        
+        // Random horizontal offset
+        const offsetX = (Math.random() - 0.5) * 120;
+        heart.style.left = "calc(50% + " + offsetX + "px)";
+        
+        heartsContainer.appendChild(heart);
+      }
+
+      // Clear hearts after animation completes
+      setTimeout(() => {
+        heartsContainer.innerHTML = "";
+      }, 2500);
+    }
+
+    /* ---------- YES BUTTON GROWS ---------- */
+    let yesScale = 1;
+    function growYes() {
+      yesScale = Math.min(2.2, yesScale + 0.1);
+      yesBtn.style.transform = `translateY(-50%) scale(${yesScale})`;
+    }
+
+    /* ---------- NO BUTTON RUNS AWAY ---------- */
+    function clamp(n, min, max) {
+      return Math.max(min, Math.min(max, n));
+    }
+
+    /* ---------- NO BUTTON CLICK HANDLER ---------- */
+    noBtn.addEventListener("click", () => {
+      noClickCount++;
+      if (noClickCount === 1) {
+        noBtn.textContent = "Are you sure?";
+      } else if (noClickCount === 2) {
+        noBtn.textContent = "Are you REALLY sure?";
+      } else {
+        // Add "really" for each additional click
+        const reallyCount = noClickCount - 2;
+        let text = "Are you";
+        for (let i = 0; i < reallyCount; i++) {
+            if (i == 20){
+                break
+            }
+            else{
+                text += " REALLY";
+            }
+        }
+        text += " sure?";
+        noBtn.textContent = text;
+      }
+    });
+
+    /* ---------- YES CLICK ---------- */
+    yesBtn.addEventListener("click", () => {
+      if (hasClicked) return;
+      hasClicked = true;
+      showCatsAnimation();
+    });
+  </script>
+</body>
+</html>
+
+
